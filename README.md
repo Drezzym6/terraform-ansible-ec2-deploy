@@ -150,7 +150,7 @@ All resources live in `terraform/main.tf`, organized into four groups:
 
 ## Ansible Code Explained
 
-`ansible/playbook.yml` runs four tasks against the `[webserver]` group defined in `inventory.ini`:
+`ansible/playbook.yml` runs five tasks against the `[webserver]` group defined in `inventory.ini`:
 
 1. **Wait for SSH to become available** (`wait_for_connection`) — a freshly created EC2 instance isn't always reachable the instant Terraform reports it as "running"; this waits (up to 3 minutes) rather than failing immediately on a timing race.
 2. **Update apt package cache** — refreshes Ubuntu's package index so the next step installs a current version of Nginx.
