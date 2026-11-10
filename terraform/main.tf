@@ -1,7 +1,7 @@
 # ---------------------------------------------------------------------------
 # Network: use the account's default VPC/subnet rather than building a new
-# one. This challenge doesn't call for custom networking, so reusing the
-# default VPC keeps the code focused on what's actually being graded
+# one. This build doesn't call for custom networking, so reusing the
+# default VPC keeps the code focused on what actually matters here
 # (EC2, S3, IAM, security groups) instead of re-deriving a VPC from scratch.
 # ---------------------------------------------------------------------------
 data "aws_vpc" "default" {

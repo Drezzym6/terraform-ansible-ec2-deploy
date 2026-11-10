@@ -7,7 +7,7 @@ variable "aws_region" {
 variable "project_name" {
   description = "Name prefix used to tag and name all resources"
   type        = string
-  default     = "tech-challenge-3"
+  default     = "tf-ansible-nginx"
 }
 
 variable "instance_type" {
@@ -17,7 +17,7 @@ variable "instance_type" {
 }
 
 variable "allowed_ssh_cidr" {
-  description = "CIDR block allowed to SSH into the instance on port 22. Defaults to open for convenience during the challenge; restrict this to your own IP (e.g. \"1.2.3.4/32\") for a production setup."
+  description = "CIDR block allowed to SSH into the instance on port 22. Defaults to open for convenience in this lab setup; restrict this to your own IP (e.g. \"1.2.3.4/32\") for a production setup."
   type        = string
   default     = "0.0.0.0/0"
 }

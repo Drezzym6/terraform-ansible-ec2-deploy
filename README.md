@@ -1,11 +1,11 @@
-# Tech Challenge 3
+# Terraform + Ansible: Automated EC2 Web Deployment
 
 ### Terraform-Provisioned EC2 + S3, Configured by Ansible to Serve "Hello, World!"
 
 This project provisions AWS infrastructure with Terraform and configures it with Ansible, split cleanly along the line each tool is actually good at: Terraform **creates** the infrastructure (the EC2 instance, the S3 bucket, the IAM role, the security group), and Ansible **configures what's already running inside it** (installs Nginx, deploys the web page, starts the service).
 
 **Live web page:** http://52.23.248.156
-*(Note: this IP is tied to the specific EC2 instance that's currently running. Infrastructure is torn down between review sessions to avoid ongoing AWS cost — if this link doesn't load, the instance was torn down after grading and can be stood back up in under 2 minutes by following the Deployment steps below; the resulting page will be the same, just at a new IP.)*
+*(Note: this IP is tied to the specific EC2 instance that's currently running. Infrastructure is torn down between demos to avoid ongoing AWS cost — if this link doesn't load, the instance was torn down and can be stood back up in under 2 minutes by following the Deployment steps below; the resulting page will be the same, just at a new IP.)*
 
 ---
 
@@ -34,7 +34,7 @@ This project provisions AWS infrastructure with Terraform and configures it with
                          │   S3 bucket        │  (private, all public
    Terraform ───────────▶│   (not used by    │   access blocked —
    (provisions)          │   the web page;   │   provisioned to satisfy
-                         │   satisfies the   │   the challenge requirement)
+                         │   satisfies the   │   the project's S3 requirement)
                          │   requirement)    │
                          └──────────────────┘
 ```
@@ -102,7 +102,7 @@ This creates 12 resources and, once done, prints four outputs:
 
 Terraform also writes two files Ansible needs, so there's no manual copy-pasting of IPs or keys between tools:
 - `../ansible/inventory.ini` — Ansible's list of which server to configure, with the instance's real IP already filled in
-- `../ansible/tech-challenge-3-key.pem` — the private half of a freshly generated SSH key pair, permissioned `0400` (owner-read-only, as SSH requires)
+- `../ansible/tf-ansible-nginx-key.pem` — the private half of a freshly generated SSH key pair, permissioned `0400` (owner-read-only, as SSH requires)
 
 ### Step 2 — Configure the server with Ansible
 
@@ -132,13 +132,13 @@ Since this project only creates a single EC2 instance, an S3 bucket, and their s
 
 All resources live in `terraform/main.tf`, organized into four groups:
 
-**Network (data sources, not resources):** rather than building a new VPC, the code looks up the account's existing **default VPC** and one of its subnets with `data "aws_vpc" "default"` and `data "aws_subnets" "default"`. The challenge doesn't call for custom networking, so this keeps the code focused on what's actually being graded (EC2/S3/IAM/security groups) instead of re-deriving a VPC from scratch.
+**Network (data sources, not resources):** rather than building a new VPC, the code looks up the account's existing **default VPC** and one of its subnets with `data "aws_vpc" "default"` and `data "aws_subnets" "default"`. This build doesn't call for custom networking, so this keeps the code focused on what actually matters here (EC2/S3/IAM/security groups) instead of re-deriving a VPC from scratch.
 
 **S3 bucket:** `aws_s3_bucket.app_bucket` is named with a random 4-byte hex suffix (`random_id.bucket_suffix`) because S3 bucket names must be globally unique across *all* AWS accounts, not just this one — a fixed name would eventually collide with someone else's bucket. `aws_s3_bucket_public_access_block` then explicitly blocks all four public-access vectors (ACLs, bucket policies, and two more granular settings) rather than relying on the "private by default" behavior silently holding — defense in depth.
 
-**SSH key pair:** `tls_private_key.ssh` generates a fresh RSA key pair during `apply` itself; `aws_key_pair.generated` registers the public half with AWS so the EC2 instance will only accept logins from whoever holds the matching private key; `local_sensitive_file.private_key` writes that private half to `ansible/tech-challenge-3-key.pem`. Generating the key in Terraform (instead of requiring someone to click "Create key pair" in the AWS Console first) means the whole project is reproducible with one `terraform apply` against a totally clean AWS account — nothing has to exist beforehand.
+**SSH key pair:** `tls_private_key.ssh` generates a fresh RSA key pair during `apply` itself; `aws_key_pair.generated` registers the public half with AWS so the EC2 instance will only accept logins from whoever holds the matching private key; `local_sensitive_file.private_key` writes that private half to `ansible/tf-ansible-nginx-key.pem`. Generating the key in Terraform (instead of requiring someone to click "Create key pair" in the AWS Console first) means the whole project is reproducible with one `terraform apply` against a totally clean AWS account — nothing has to exist beforehand.
 
-**Security group:** `aws_security_group.web_sg` opens port 22 (SSH, so Ansible can connect) and port 80 (HTTP, so the web page is reachable), with all outbound traffic allowed. SSH is open to `0.0.0.0/0` by default for convenience during grading — in a real production setup, `var.allowed_ssh_cidr` should be narrowed to a specific IP or VPN range.
+**Security group:** `aws_security_group.web_sg` opens port 22 (SSH, so Ansible can connect) and port 80 (HTTP, so the web page is reachable), with all outbound traffic allowed. SSH is open to `0.0.0.0/0` by default for convenience in this lab setup — in a real production setup, `var.allowed_ssh_cidr` should be narrowed to a specific IP or VPN range.
 
 **IAM role:** `aws_iam_role.ec2_role` is assumable only by the EC2 service, and `aws_iam_role_policy.s3_access` grants it `s3:ListBucket`/`s3:GetObject`/`s3:PutObject` scoped to **only the one bucket this project created** — not `s3:*`, not `Resource: "*"`. This is least-privilege IAM: the instance can do exactly what it needs and nothing else, so a compromised instance can't be used to touch any other bucket in the account.
 
@@ -160,14 +160,14 @@ All resources live in `terraform/main.tf`, organized into four groups:
 
 A `handler` (`Reload nginx`) is attached to the page-deployment task, so if the page template is ever changed and the playbook re-run, Nginx reloads to pick up the new content — but it only fires when something actually changed, not on every run.
 
-`ansible.cfg` sets `host_key_checking = False`, since this instance is brand-new every time Terraform creates it (a new IP each time means SSH would otherwise stop and ask to manually confirm trust on every single run) — acceptable for a short-lived challenge environment, but worth tightening (e.g. pinning known host keys) for a long-lived production server.
+`ansible.cfg` sets `host_key_checking = False`, since this instance is brand-new every time Terraform creates it (a new IP each time means SSH would otherwise stop and ask to manually confirm trust on every single run) — acceptable for a short-lived lab environment, but worth tightening (e.g. pinning known host keys) for a long-lived production server.
 
 ---
 
-## Evaluation Checklist
+## Project Checklist
 
 - ✅ EC2 instance, S3 bucket, IAM role, and security group — all provisioned by Terraform
 - ✅ Nginx installed and "Hello, World!" page deployed — by Ansible
 - ✅ Web page functional and reachable over HTTP
 - ✅ README with setup, deployment, and code explanation (this file)
-- ✅ Private GitHub repository, shared with mentor
+- ✅ Private GitHub repository, shared with a reviewer for feedback
